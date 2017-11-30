@@ -1,0 +1,260 @@
+---
+output: 
+  html_document :
+    theme: cerulean
+    toc: true
+    toc_float: true
+
+---
+
+## Tarea 2 -  Web Mining {.tabset}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(knitr.table.format = "html") 
+library(knitr)
+library(rmarkdown)
+library(lubridate)
+library(tidyverse)
+library(stringr)
+library(rvest)
+library(XML)
+library(purrr)
+library(chron)
+library(scales)
+library(ggplot2)
+library(RJSONIO)
+library(jsonlite)
+library(xts)
+library(timeDate)
+library(forecast)
+library(dygraphs)
+        
+setwd("C:/Users/Pablo/Google Drive/Promidat/Web_Mining_Legrende/Tarea2")
+```
+
+### 1) Apartamentos en alquiler
+```{r, fig.align='center', warning=F}
+
+# Extracción para 200 anuncios
+extract.page.info <- function(baseurl, path, n){
+  out <- list()
+  for(i in seq_len(n)){
+    url <-  paste0(baseurl, path)
+    page <- read_html(url)
+
+#Tabla 1
+tabla1 <- page %>%
+      html_node("section.product-box") %>%
+      html_node("div.ad-info") %>%
+      html_node("div.container") %>%
+      html_node("div.row") %>%
+      html_node("div.col-800") %>% 
+      html_node("ul") %>% 
+      html_text()
+tabla1
+# Limpieza y ordenamiento de la tabla
+tabla1 <- str_split(tabla1,"\n\n\n")
+tabla1 <- flatten_chr(tabla1)
+tabla1 <- str_replace_all(tabla1,"(^\\s|\\s$)","")
+tabla1 <- str_replace_all(tabla1, "\\s"," ")
+
+# Tabla 2
+tabla2 <- page %>%
+      html_node("section.product-box") %>%
+      html_node("div.ad-details") %>%
+      html_node("div.container") %>%
+      html_node("div.row") %>%
+      html_node("div.col-800") %>% 
+      html_node("ul") %>% 
+      html_text()
+tabla2
+# Limpieza y ordenamiento de la tabla
+tabla2 <- str_split(tabla2,"\n\n\n")
+tabla2 <- flatten_chr(tabla2)
+tabla2 <- str_replace_all(tabla2,"(^\\s|\\s$)","")
+tabla2 <- str_replace_all(tabla2, "\\s"," ")
+
+# Todo en una sola tabla
+info <- c(tabla1,tabla2)
+info
+info_list <- list(price = str_extract(info[str_detect(info,"Alquiler:")],"(\\d|\\.|\\,|\\$|₡)+"),
+                          year = str_extract(info[str_detect(info,"Años de construcción:")],"\\d+$"),
+                          bathrooms = str_extract(info[str_detect(info,"Baños:")],"\\d*$"),
+                          parking = str_extract(info[str_detect(info,"Estacionamientos:")],"\\d*$"),
+                          area = str_extract(info[str_detect(info,"^M² de construcción:")],"\\d*$"),
+                          bedrooms = str_extract(info[str_detect(info,"Recamaras:")],"\\d*$"))
+
+    out[[i]] <- info_list
+    path <- page %>% html_nodes("a.next") %>% html_attr("href")
+    print(i)
+  }
+
+  out <- as.data.frame(t(sapply(out, `[`)))
+  out[out  == "character(0)"] <- NA
+  dollars <- str_detect(out$price,"\\$")
+  out$price <- str_replace_all(out$price,"(\\.00|\\,|\\$|₡)","")
+  out$price <- as.numeric(out$price)  
+  out[dollars,]$price  <- out[dollars,]$price * 570
+  out$year <- as.numeric(as.vector(years(Sys.Date()))) - as.numeric(as.character(out$year))
+  out$year <- ifelse(out$year > 1900,out$year,NA)
+  out$bathrooms <- as.numeric(out$bathrooms)
+  out$parking <- as.numeric(out$parking)
+  out$area <- as.numeric(out$area)
+  out$bedrooms <- as.numeric(out$bedrooms)
+
+  return(out)
+}
+```
+
+```{r, warning = F, error = T}
+house.prices <- extract.page.info(baseurl = "https://www.encuentra24.com", path = "/costa-rica-es/bienes-raices-alquiler-apartamentos/aptos-en-guachipelin-y-pozos-de-santa-ana-desde-550/9573484", n = 2)
+saveRDS(house.prices,"house.prices")
+house.prices
+```
+
+```{r, warning = F}
+data <- house.prices[house.prices <= 20000000,]
+data$price <- data$price/1000000
+
+ggplot(data, aes(x = price)) + 
+  geom_density(fill = "#36BC7A") +
+  geom_vline(data = data, mapping = aes(xintercept = median(price)), linetype="dashed") +
+  scale_x_continuous(labels = dollar_format(suffix = "M", prefix = "₡"),
+                     breaks = trans_breaks(identity, identity, n = 10)) +
+  scale_y_continuous(breaks = trans_breaks(identity, identity)) +
+  theme_minimal() +
+  labs(x = "",
+       y = "",
+       title = "Distribución de la variable precio",
+       subtitle = "Para 200 apartamentos actualmente en alquiler en la web encuentra24",
+       caption = "Fuente de datos : www.encuentra24.com")
+```
+
+La mayoría de apartamentos de alquiler tienen un precio que ronda los 375.000 colones.
+
+```{r, warning = F}
+data <- house.prices
+
+ggplot(data, aes(x = year)) + 
+  geom_density(fill = "#66BB6A") +
+  geom_vline(data = data, mapping = aes(xintercept = median(year)), linetype="dashed") +
+  scale_x_continuous(breaks = trans_breaks(identity, identity, n = 10),expand = c(0,0)) +
+  scale_y_continuous(breaks = trans_breaks(identity, identity)) +
+  theme_minimal() +
+  labs(x = "",
+       y = "",
+       title = "Distribución de la variable año",
+       subtitle = "Para 200 apartamentos actualmente en alquiler en la web encuentra24",
+       caption = "Fuente de datos : www.encuentra24.com")
+```
+
+La gran mayoría de apartamentos fueron construidos después del 2010.
+
+```{r, warning = F}
+data <- house.prices[house.prices <= 20000000,]
+data$price <- data$price/1000000
+
+ggplot(data = data, mapping = aes(x = price, y = area)) + 
+  geom_point() +
+  geom_smooth() +
+  scale_x_continuous(labels = dollar_format(suffix = "M", prefix = "₡"),
+                     breaks = trans_breaks(identity, identity, n = 6)) +
+  scale_y_continuous(labels = dollar_format(suffix = " m2", prefix = ""),
+                     breaks = trans_breaks(identity, identity, n = 8)) +
+  theme_minimal() +
+  labs(x = "Precio",
+       y = "Area",
+       title = "Relación precio area",
+       subtitle = "Para 200 apartamentos actualmente en alquiler en la web encuentra24",
+       caption = "Fuente de datos : www.encuentra24.com")
+```
+
+El precio de alquiler es directamente proporcional al área de construcción.
+
+```{r, warning = F}
+data <- house.prices
+
+ggplot(data, aes(x = bedrooms)) + 
+  geom_density(fill = "#66BB6A") +
+  geom_vline(data = data, mapping = aes(xintercept = median(year)), linetype="dashed") +
+  scale_x_continuous(breaks = trans_breaks(identity, identity, n = 10),expand = c(0,0)) +
+  scale_y_continuous(breaks = trans_breaks(identity, identity)) +
+  theme_minimal() +
+  labs(x = "",
+       y = "",
+       title = "Distribución de la variable habitaciones",
+       subtitle = "Para 200 apartamentos actualmente en alquiler en la web encuentra24",
+       caption = "Fuente de datos : www.encuentra24.com")
+```
+
+La mayoría de apartamentos cuentan con 2 habitaciones aunque tamvíen resaltan los que tienen 1 sola habitación.
+
+```{r, warning = F}
+data <- house.prices
+
+ggplot(data, aes(x = parking)) + 
+  geom_density(fill = "#66BB6A") +
+  geom_vline(data = data, mapping = aes(xintercept = median(year)), linetype="dashed") +
+  scale_x_continuous(breaks = trans_breaks(identity, identity, n = 10),expand = c(0,0)) +
+  scale_y_continuous(breaks = trans_breaks(identity, identity)) +
+  theme_minimal() +
+  labs(x = "",
+       y = "",
+       title = "Distribución de la variable parqueos",
+       subtitle = "Para 200 apartamentos actualmente en alquiler en la web encuentra24",
+       caption = "Fuente de datos : www.encuentra24.com")
+```
+
+Los apartamentos tienen 1 o 2 espacios de parqueo usualmente.
+
+### 2) Densidad de población por país
+```{r, warning = F}
+download.file(url = "https://raw.githubusercontent.com/sumeetsk/dbclass/master/countries.xml",destfile = "countries.xml")
+countries <- XML::xmlParse("countries.xml")
+root <- XML::xmlRoot(countries)
+paises <-xmlChildren(root)
+c.datos <- c()
+for (i in seq_along(paises)) {
+  atributos <-xmlAttrs(paises[[i]])
+  datos <-c(atributos["name"],atributos["population"])
+  c.datos <-rbind(c.datos,datos)
+}
+datos <- c.datos[1:50,]
+datos <- as.data.frame(datos)
+datos <- datos %>% remove_rownames %>% column_to_rownames(var="name")
+
+# Agrupación jerárquica
+modelo <- hclust(dist(datos),method= "ward.D")
+plot(modelo,hang=-1)
+rect.hclust(modelo, k=4, border="red")
+```
+
+Al hacer clasificación jerárquica con 5 grupos se puede observar como China forma ella sola un grupo ya que su densidad plobacional es muy superior a la de otros países. En otro grupo se encuentran Brasil y Bangladesh. En otro se encuentran Burma, Algeria, Canada, Argentina y Colombia. Por último se encuentran todo el resto de países.
+
+
+### 3) Niveles de emisión de CO2
+```{r, fig.align='center', warning=F}
+download.file(url = "https://pkgstore.datahub.io/core/co2-fossil-global:global_json/data/global_json.json",destfile = "global.json")
+global <- fromJSON(txt =  "global.json")
+global <- as.data.frame(global)
+global.ts <- ts(global$Total,start=c(1751,1),freq=1)
+auto.arima(global.ts)
+fit<-arima(global.ts,order=c(1,2,2))
+pred<-predict(fit,n.ahead=6)
+preds<-pred$pred
+LimInf<-preds-2*pred$se
+LimSup<-preds+2*pred$se
+per_1<-seq(as.Date("1751-1-1"),as.Date("2010-1-1"),"year")
+per_2<-seq(as.Date("2011-1-1"),as.Date("2016-1-1"),"year")
+todas.series<-cbind(Total=xts(global$Total,order.by=per_1),LimInf=xts(LimInf,order.by=per_2),Pronostico=xts(preds,order.by=per_2),LimSup=xts(LimSup,order.by=per_2))
+
+dygraph(todas.series,main="Niveles de emisión de CO2 de 1751 a 2016",ylab="Millones de toneladas métricas")%>%
+  dySeries(c("LimInf", "Pronostico", "LimSup"), label = "Predicción")%>%
+  dyRangeSelector(height = 20, strokeColor = "")%>%  
+  dyOptions(axisLineColor = "navy", 
+            gridLineColor = "lightblue")
+```
+
+
+

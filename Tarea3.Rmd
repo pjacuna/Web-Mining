@@ -1,0 +1,239 @@
+---
+output: 
+  html_document :
+    theme: cerulean
+    toc: true
+    toc_float: true
+
+---
+
+## Tarea 2 -  Web Mining {.tabset}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(knitr.table.format = "html") 
+library(knitr)
+library(rmarkdown)
+library(lubridate)
+library(tidyverse)
+library(stringr)
+library(rvest)
+library(XML)
+library(purrr)
+library(chron)
+library(scales)
+library(ggplot2)
+library(RJSONIO)
+library(jsonlite)
+library(xts)
+library(timeDate)
+library(forecast)
+library(dygraphs)
+library(rattle)
+library(fmsb)
+library(cluster)
+        
+setwd("C:/Users/Pablo/Google Drive/Promidat/Web_Mining_Legrende/Tarea3")
+```
+
+### 1) Ejercicios del libro
+```{r}
+
+## [0-9]+\\$
+## Cualquier número una o varias veces, signo de dólar
+str_view_all(c("El precio del barril de gasolina es de 70$"), pattern = "[0-9]+\\$")
+
+## \\b[a-z]{1,4}\\b
+## Cualquier letra en minúscula al menos una vez y hasta cuatro veces
+str_view_all(c("La palabra tasa tiene cuatro letras"), pattern = "\\b[a-z]{1,4}\\b")
+
+## .*?\\.txt$
+## Cualquier caracter cero o varias veces, finaliza con la expresión .txt
+str_view_all(c("Ver rent.txt","El archivo rent.txt contiene la lista de los morosos en el rubro de alquiler"), pattern = ".*?\\.txt$")
+
+## \\d{2}/\\d{2}/\\d{4}
+## Número de dos dígitos, slash, número de dos dígitos, slash, número de cuatro dígitos
+str_view_all(c("El 09/11/2017 se celebra el día de La Almudena en Madrid"), pattern = "\\d{2}/\\d{2}/\\d{4}")
+
+## <(.+?)>.+?</\\1>
+## Paréntesis
+str_view_all(c("<sasas122e>zz</1>"), pattern = "<(.+?)>.+?</\\1>")
+```
+
+### 2) Ejemplo 2 - Semana 2
+```{r, warning = F}
+## class = str_extract(info[str_detect(info,"Categoria:")],"\\w*$")
+## Caracter cero o más veces. La expresión termina con esos caracteres.
+
+## location = str_extract(info[str_detect(info,"Localización:")],"\\w*\\s?\\w*$")
+## Caracter cero o más veces, espacio en blanco cero o una vez, finaliza con caracter cero o más veces.
+
+## price = str_extract(info[str_detect(info,"Precio:")],"(\\d|\\.|\\,|\\$|₡)+")
+## Número o punto o coma o símbolo de dólar o colón.
+
+## year = str_extract(info[str_detect(info,"Año de construcción:")],"\\d+$")
+## Finaliza con número una o más veces.
+
+## bathrooms = str_extract(info[str_detect(info,"Baños:")],"\\d*$")
+## Finaliza con número cero o más veces.
+
+## parking = str_extract(info[str_detect(info,"Estacionamientos:")],"\\d*$")
+## Finaliza con número cero o más veces.
+
+## area = str_extract(info[str_detect(info,"^M² de construcción:")],"\\d*$")
+## Finaliza con número cero o más veces.
+
+## bedrooms = str_extract(info[str_detect(info,"Recámaras:")],"\\d*$"))
+## Finaliza con número cero o más veces.
+```
+
+
+### 3) Serie FRIENDS
+```{r, fig.align='center', warning=F}
+url <- "https://en.wikipedia.org/wiki/List_of_Friends_episodes"
+page <- read_html(url)
+
+## Scraping de las tablas correspondientes a las temporadas
+season1 <- page %>%
+  html_nodes(xpath='//*[@id="mw-content-text"]/div/table[2]') %>%
+  html_table()
+season2 <- page %>%
+  html_nodes(xpath='//*[@id="mw-content-text"]/div/table[3]') %>%
+  html_table()
+season3 <- page %>%
+  html_nodes(xpath='//*[@id="mw-content-text"]/div/table[4]') %>%
+  html_table()
+season4 <- page %>%
+  html_nodes(xpath='//*[@id="mw-content-text"]/div/table[5]') %>%
+  html_table()
+season5 <- page %>%
+  html_nodes(xpath='//*[@id="mw-content-text"]/div/table[6]') %>%
+  html_table()
+season6 <- page %>%
+  html_nodes(xpath='//*[@id="mw-content-text"]/div/table[7]') %>%
+  html_table()
+season7 <- page %>%
+  html_nodes(xpath='//*[@id="mw-content-text"]/div/table[8]') %>%
+  html_table()
+season8 <- page %>%
+  html_nodes(xpath='//*[@id="mw-content-text"]/div/table[10]') %>%
+  html_table()
+season9 <- page %>%
+  html_nodes(xpath='//*[@id="mw-content-text"]/div/table[11]') %>%
+  html_table()
+season10 <- page %>%
+  html_nodes(xpath='//*[@id="mw-content-text"]/div/table[12]') %>%
+  html_table()
+
+season1<-as.data.frame(season1)
+season2<-as.data.frame(season2)
+season3<-as.data.frame(season3)
+season4<-as.data.frame(season4)
+season5<-as.data.frame(season5)
+season6<-as.data.frame(season6)
+season7<-as.data.frame(season7)
+season8<-as.data.frame(season8)
+season9<-as.data.frame(season9)
+season10<-as.data.frame(season10)
+
+## Unión de tablas
+friends <- rbind(season1,season2,season3,season4,season5,season6,season7,season8,season9,season10)
+friends$U.S..viewers..millions.
+
+## Extracción de valor en millones utilizando expresiones regulares
+friends.list <- list(viewers = str_extract(friends$U.S..viewers..millions.,"(\\d{1,2}|\\.|\\d{1,2})+"))
+friends.list <- as.data.frame(friends.list)
+friends.list$viewers <- as.numeric(as.character(friends.list$viewers))
+
+## Serie de tiempo
+friends.ts <- ts(friends.list$viewers,start=c(1,1),freq=1)
+auto.arima(friends.ts)
+fit<-arima(friends.ts,order=c(1,1,1))
+pred<-predict(fit,n.ahead=10)
+preds<-pred$pred
+LimInf<-preds-2*pred$se
+LimSup<-preds+2*pred$se
+per_1<-seq(1,227)
+per_2<-seq(228,251)
+todas.series<-cbind(friends.ts,LimInf,preds,LimSup)
+todas.series
+
+dygraph(todas.series,main="Televidentes de la serie Friends",ylab="Millones de televidentes")%>%
+  dySeries(c("LimInf", "preds", "LimSup"), label = "Predicción")%>%
+  dyRangeSelector(height = 20, strokeColor = "")%>%  
+  dyOptions(axisLineColor = "navy", 
+            gridLineColor = "lightblue")
+```
+
+### 4) Datos de población mundial
+```{r, fig.align='center', warning=F}
+url <- "https://es.wikipedia.org/wiki/Poblaci%C3%B3n_mundial"
+page <- read_html(url)
+
+## Scraping de la tabla
+table <- page %>%
+  html_nodes(xpath='//*[@id="mw-content-text"]/div/table[2]') %>%
+  html_table()
+table <- as.data.frame(table)[8:26,-1]
+
+
+table.list <- list(Total = str_replace_all(table$Total,"[[:space:]]",""),
+                   Africa = str_replace_all(table$África,"[[:space:]]",""),
+                   Asia = str_replace_all(table$Asia,"[[:space:]]",""),
+                   Europa = str_replace_all(table$Europa,"[[:space:]]",""),
+                   America = str_replace_all(table$América,"[[:space:]]",""),
+                   Oceania = str_replace_all(table$Oceanía,"[[:space:]]",""),
+                   Crecimiento = str_extract(table$Crecimiento....,"(\\d{1,2}|\\,|\\d{1,2})+"),
+                   Crecimiento.anual = str_extract(table$Crecimiento.anual.medio....,"(\\d{1,2}|\\,|\\d{1,2})+")
+                   )
+table.df <- as.data.frame(table.list)
+table.df$Total <- as.numeric(as.character(table.df$Total))
+table.df$Africa <- as.numeric(as.character(table.df$Africa))
+table.df$Asia <- as.numeric(as.character(table.df$Asia))
+table.df$Europa <- as.numeric(as.character(table.df$Europa))
+table.df$America <- as.numeric(as.character(table.df$America))
+table.df$Oceania <- as.numeric(as.character(table.df$Oceania))
+table.df$Crecimiento <- str_replace(table.df$Crecimiento,"\\,","\\.")
+table.df$Crecimiento.anual <- str_replace(table.df$Crecimiento.anual,"\\,","\\.")
+table.df$Crecimiento <- as.numeric(table.df$Crecimiento)
+table.df$Crecimiento.anual <- as.numeric(table.df$Crecimiento.anual)
+
+## Serie de tiempo Total
+friends.ts <- ts(friends.list$viewers,start=c(1,1),freq=1)
+auto.arima(friends.ts)
+fit<-arima(friends.ts,order=c(1,1,1))
+pred<-predict(fit,n.ahead=10)
+preds<-pred$pred
+LimInf<-preds-2*pred$se
+LimSup<-preds+2*pred$se
+per_1<-seq(1,227)
+per_2<-seq(228,251)
+todas.series<-cbind(friends.ts,LimInf,preds,LimSup)
+todas.series
+
+dygraph(todas.series,main="Televidentes de la serie Friends",ylab="Millones de televidentes")%>%
+  dySeries(c("LimInf", "preds", "LimSup"), label = "Predicción")%>%
+  dyRangeSelector(height = 20, strokeColor = "")%>%  
+  dyOptions(axisLineColor = "navy", 
+            gridLineColor = "lightblue")
+
+## Análisis de componentes principales
+pca<-PCA(table.df, scale.unit=TRUE, ncp=4, graph = FALSE)
+cos2.ind<-(pca$ind$cos2[,1]+pca$ind$cos2[,2])*100
+cos2.ind
+plot(pca, 
+     axes=c(1, 2), 
+     choix="ind",
+     col.ind="red",
+     new.plot=TRUE,
+     select="cos2 0.1")
+cos2.var<-(pca$var$cos2[,1]+pca$var$cos2[,2])*100
+cos2.var
+plot(pca, 
+     axes=c(1, 2), 
+     choix="var",
+     col.var="blue",
+     new.plot=TRUE,
+     select="cos2 0.1")
+```
+

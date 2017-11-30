@@ -1,0 +1,343 @@
+---
+output: 
+  html_document :
+    theme: cerulean
+    toc: true
+    toc_float: true
+
+---
+
+## Tarea 4 -  Web Mining {.tabset}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(knitr.table.format = "html") 
+library(knitr)
+library(rmarkdown)
+library(tidyverse)
+library(lubridate)
+library(stringr)
+library(rvest)
+library(chron)
+library(ggplot2)
+library(dygraphs)
+library(FactoMineR)
+library(devtools)
+library(Rfacebook)
+library(purrr)
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(twitteR)
+library(leaflet)
+library(ggmap)
+library(pander)
+
+detach("package:plyr", unload=TRUE) 
+
+install_github("pablobarbera/Rfacebook/Rfacebook")
+        
+setwd("C:/Users/Pablo/Google Drive/Promidat/Web_Mining_Legrende/Tarea4")
+
+# Función extraer datos
+extraer_datos <- function(tuit){
+    #extraemos el texto texto
+  text <- tuit$getText()
+  #Comprobamos que contenga la palabra Costa Rica
+  if(str_detect(text,"Nicaragua")){
+    #separamos el texto por comas
+    values <- unlist(str_split(pattern = ",",string = text))
+    #extraemos la magnitud 
+    mag <- str_extract(string = values[1],pattern = "[0-9]\\.[0-9]")
+    #extraemos el nombre de la cuidad
+    ciudad <-gsub(".*\\sde ","",values[2])
+    #extraemos el nombre del pais
+    pais <- values[3]
+    #Extraemos la fecha del sismo
+    fecha <- str_extract(values[4], "\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}")
+    #Unimos la dirección
+    direccion <- str_c(ciudad,pais,sep = ",")
+    #retornamos la magnitud, cuidad,provincia,pais, fecha y direccion
+    return(c(mag,ciudad,pais,fecha,direccion))
+  }else{
+    #no el texto hace referencia a otro pais retormanos NULL
+    return(NULL)
+  }
+}
+
+# Función score sentimental
+sentimental.score <- function(text, positive.words, negative.words) {
+  # Inicio de la función    
+  sentimental.score <-  lapply(text,
+  function(text, positive.words, negative.words) {
+    # Separamos el texto en palabras independientes
+    words = unlist(str_split(text, " "))
+    # Conteo de palabras positivas
+    positive = !is.na(match(words, positive.words))
+    # Conteo de palabras negativas
+    negative = !is.na(match(words, negative.words))
+    # Diferencia entre palabras positivas y negativas
+    score = sum(positive) - sum(negative)
+    # Se retorna el texto,puntaje y la fecha de publicación
+    out <- list(text = text, score =  ifelse(score > 0,"Positivo",ifelse(score == 0,"Neutral","Negativo")))
+    return(out)
+  }, positive.words, negative.words)
+  # Se convierte a un data.frame y se da formato a las columnas.
+  out <- data.frame(matrix(unlist(sentimental.score),ncol = 2,byrow = T),stringsAsFactors = F)
+  colnames(out) <- c("text","score")
+  return(out)
+  
+# Función extraer comentarios
+#extraer_comentarios <- function()
+}
+```
+
+
+
+### 1) Facebook
+```{r, eval=FALSE, include=FALSE}
+fb_oauth <- fbOAuth(app_id="493763371002813", 
+                    app_secret="fda53f8b429179961c75fb16688db7b7",
+                    extended_permissions = TRUE)
+save(fb_oauth, file="fb_oauth")
+```
+
+```{r, warning = F}
+load("fb_oauth")
+clubamerica_fb_page <- getPage(page = "ClubAmerica", token = fb_oauth, n = 200, reactions = T)
+saveRDS(clubamerica_fb_page, file = "clubamerica_fb_page")
+```
+
+```{r, warning = F}
+files <- c("clubamerica_fb_page")
+datos <- data.frame(Equipo = c("Club America")) %>% 
+  mutate(file_contents = map(files, ~ readRDS(.))) %>% 
+  unnest() 
+```
+
+```{r, warning = F}
+# Publicación con más corazones
+hearts <- datos[which.max(datos$love_count),]
+hearts
+
+# Cinco publicaciones con más likes
+likes <- head(arrange(datos,desc(likes_count)), n = 5)
+
+# Personas más influyentes
+comments <- getPost(post = "110096398267_10156186525068268", token = fb_oauth, n = 1000, comments = TRUE, reactions = TRUE)
+comments <- as.data.frame(comments)
+
+influyentes <- head(arrange(comments,desc(comments.likes_count)), n = 5)
+influyentes[,c(12,13,15)]
+
+# Gráfico
+enero <- getPage(page="ClubAmerica", token=fb_oauth, since = '2017/01/01', until='2017/01/30', n = 20, reactions = T)
+saveRDS(enero, file = "enero")
+febrero <- getPage(page="ClubAmerica", token=fb_oauth, since = '2017/02/01', until='2017/02/28', n = 20, reactions = T)
+saveRDS(febrero, file = "febrero")
+marzo <- getPage(page="ClubAmerica", token=fb_oauth, since = '2017/03/01', until='2017/03/30', n = 20, reactions = T)
+saveRDS(marzo, file = "marzo")
+abril <- getPage(page="ClubAmerica", token=fb_oauth, since = '2017/04/01', until='2017/04/30', n = 20, reactions = T)
+saveRDS(abril, file = "abril")
+mayo <- getPage(page="ClubAmerica", token=fb_oauth, since = '2017/05/01', until='2017/05/30', n = 20, reactions = T)
+saveRDS(mayo, file = "mayo")
+junio <- getPage(page="ClubAmerica", token=fb_oauth, since = '2017/06/01', until='2017/06/30', n = 20, reactions = T)
+saveRDS(junio, file = "junio")
+julio <- getPage(page="ClubAmerica", token=fb_oauth, since = '2017/07/01', until='2017/07/30', n = 20, reactions = T)
+saveRDS(julio, file = "julio")
+agosto <- getPage(page="ClubAmerica", token=fb_oauth, since = '2017/08/01', until='2017/08/30', n = 20, reactions = T)
+saveRDS(agosto, file = "agosto")
+setiembre <- getPage(page="ClubAmerica", token=fb_oauth, since = '2017/09/01', until='2017/09/30', n = 20, reactions = T)
+saveRDS(setiembre, file = "setiembre")
+octubre <- getPage(page="ClubAmerica", token=fb_oauth, since = '2017/10/01', until='2017/10/30', n = 20, reactions = T)
+saveRDS(octubre, file = "octubre")
+
+files <- c("enero","febrero","marzo","abril","mayo","junio","julio","agosto","setiembre","octubre")
+datos <- data.frame(Mes = c("Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Setiembre","Octubre")) %>% mutate(file_contents = map(files, ~ readRDS(.))) %>% unnest() 
+
+datos$created_time <- as_datetime(datos$created_time)
+
+reacciones_por_mes <- datos %>% 
+mutate(month = as_date(floor_date(created_time,"months")), # mes de la publicaciñin
+         month_label = factor(strftime(month,"%B"),levels = unique(strftime(month,"%B")),ordered = T)) %>% 
+group_by(month) %>% 
+summarise(month_label = unique(month_label),
+            posts = n(), # cantidad de posts
+            likes = sum(likes_count,na.rm = T), #suma de los likes
+            like_by_post = likes/posts, # promedio de likes por publicacion
+            shares = sum(shares_count), # suma de compartidos
+            comments = sum(comments_count,na.rm = T), # suma de comentarios
+            love = sum(love_count,na.rm = T), # suma de 'amor'
+            haha = sum(haha_count,na.rm = T), # suma de 'jaja'
+            wow = sum(wow_count,na.rm = T), # suma de 'sorpresa'
+            sad = sum(sad_count,na.rm = T), # suma de 'tristesa'
+            angry = sum(angry_count,na.rm = T), # suma de 'enojo'
+            positive = (love+wow),
+            negative = (angry+sad + haha)) %>% 
+gather(reaction,value,-month, -month_label)
+reacciones_por_mes[is.na(reacciones_por_mes)] <- 0
+reacciones_por_mes$value <- as.integer(reacciones_por_mes$value)
+
+# Likes por mes
+data <- filter(reacciones_por_mes, reaction == "likes")
+ggplot(data, aes(x = month, y = value, color = "Red")) + 
+  geom_line() + 
+  #scale_y_continuous(labels = comma) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%B")+
+  labs(title = "Cantidad de likes por mes",
+       subtitle = "Desde enero de 2017 hasta octubre del 2017",
+       caption = "Fuente de datos : www.facebook.com",
+       y = "Conteo de likes",
+       x = "Fecha") +
+  theme(legend.position = "none",
+        plot.background = element_rect(fill = "gray98", color = "gray98"),
+        panel.grid.major = element_line(color = "gray85"),
+        panel.grid.minor = element_line(color = "gray85")) 
+
+# Promedio de likes por publicación
+data <- filter(reacciones_por_mes, reaction == "like_by_post")
+ggplot(data, aes(x = month, y = value, color = "Green")) + 
+  geom_line() + 
+  #scale_y_continuous(labels = comma) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%B")+
+  labs(title = "Promedio de likes por publicación por mes",
+       subtitle = "Desde enero de 2017 hasta octubre del 2017",
+       caption = "Fuente de datos : www.facebook.com",
+       y = "Conteo de likes por publicación",
+       x = "Fecha") +
+  theme(legend.position = "none",
+        plot.background = element_rect(fill = "gray98", color = "gray98"),
+        panel.grid.major = element_line(color = "gray85"),
+        panel.grid.minor = element_line(color = "gray85")) 
+
+# Porcentaje de reacciones positivas y negativas
+data <- filter(reacciones_por_mes, reaction %in% c("positive","negative"))
+ggplot(data, aes(x = month, y = value, fill = reaction)) + 
+  geom_bar(stat = "identity", position="dodge") +
+  scale_fill_manual(values = c("#E53935","#40C4FF"),labels = c("Negativo", "Positivo")) +
+  #scale_y_continuous(labels = comma) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b")+
+  labs(title = "Porcentaje de reacciones positivas y negativas",
+       subtitle = "Distribución de las suma de reacciones de enero de 2017 a septiembre del 2017",
+       caption = "Fuente de datos : www.facebook.com",
+       y = "",
+       x = "",
+       fill = "Tipo de reacción") +
+  theme(legend.position = "bottom",
+        plot.background = element_rect(fill = "gray98", color = "gray98"),
+        panel.grid.major = element_line(color = "gray85"),
+        panel.grid.minor = element_line(color = "gray85"))
+
+# ACP
+table <- datos[,c(3,11:17)]
+pca<-PCA(table, scale.unit=TRUE, ncp=2, graph = FALSE)
+cos2.ind<-(pca$ind$cos2[,1]+pca$ind$cos2[,2])*100
+plot(pca, 
+     axes=c(1, 2), 
+     choix="ind",
+     col.ind="red",
+     new.plot=TRUE,
+     select="cos2 0.1")
+cos2.var<-(pca$var$cos2[,1]+pca$var$cos2[,2])*100
+plot(pca, 
+     axes=c(1, 2), 
+     choix="var",
+     col.var="blue",
+     new.plot=TRUE,
+     select="cos2 0.1")
+#Se puede inferir que los usuarios generalmente comentan y comparten a la vez que les gustan los posts, es decir, cuando también le dan like o love a la publicación
+
+# Gráfico de barras
+table.g <- table %>% summarise(Amor = sum(love_count), Risas = sum(haha_count), Sorpresa = sum(wow_count), Triste = sum(sad_count), Enojo = sum(angry_count)) %>% gather(key="Emociones", value="Sumatoria", 1:5)
+
+ggplot(table.g, aes(x=Emociones, y=Sumatoria, fill=Emociones)) + geom_col()
+```
+
+### 2) Ovsicori
+```{r, warning = F}
+# Conexión con el API
+api_key <- "d8f4fVrx5BUoFCLC7nYyFEhTh"
+api_secret <- "oqyGEu9REkpjFvOPr1S8R8uQUsMv391y5eGc1TFSfHoYTqWlJp"
+setup_twitter_oauth(api_key, api_secret)
+
+# Descarga de tweets
+user <- twitteR::getUser("@OVSICORI_UNA")
+tweets <- userTimeline(user, n = 1000)
+
+# Tweets relacionados al país Nicaragua
+# Función extraer_datos para todos los tuits en la lista
+lista_tweets <- lapply(tweets,extraer_datos)
+# Convertimos la lista en un data.frame
+df_tweets <- do.call(rbind,lista_tweets)
+df_tweets <- data.frame(df_tweets,stringsAsFactors=F)
+# Añadimos nombre a las columnas
+colnames(df_tweets) <- c("Magnitud","Ciudad","Pais","Fecha-Hora","Direccion")
+# Guardamos la magnitud como un numero
+df_tweets["Magnitud"] <- as.numeric(unlist(df_tweets["Magnitud"]))
+# Convertimos la fecha de tipo texto a tipo fecha
+df_tweets["Fecha-Hora"] <- ymd_hm(df_tweets[,"Fecha-Hora"])
+pander(head(df_tweets))
+
+# Epicentros de actividad sísmica
+address <- df_tweets %>% select(Direccion) %>% distinct()
+pander(head(address))
+address <- cbind(address,geocode(address$Direccion))
+df_tweets <- left_join(df_tweets,address)
+pander(head(df_tweets))
+pal <- colorNumeric(
+  palette = "Reds",
+  domain = df_tweets$Magnitud)
+mapa  <- leaflet() %>% addProviderTiles(providers$OpenStreetMap)
+mapa <- addTiles(mapa) %>% addProviderTiles(providers$OpenStreetMap)
+mapa <- addCircles(mapa,
+                   lng = df_tweets$lon, lat = df_tweets$lat,#Indicamos la latitud y longitud de las marcas.
+                   weight = 1,
+           radius = df_tweets$Magnitud*1000, # Indicamos el radio de nuestra marca.
+           popup = str_c("<b>Cuidad:</b>",
+                         df_tweets$Ciudad,
+                         "<b>Magnitud:</b>",
+                         df_tweets$Magnitud,
+                         "<b>Fecha:</b>",
+                         df_tweets$`Fecha-Hora`,
+                         sep="<br/>"),# Indicamos le información que debe mostrarse al hacer clic sobre una marca.
+           color = pal(df_tweets$Magnitud) # Indicamos la paleta de color a utilizar.
+                   ) %>% addProviderTiles(providers$OpenStreetMap)
+mapa  <- addLegend(mapa,
+                   position = "bottomright",# posición de la leyenda en el mapa (inferior derecha)
+                   pal = pal, # paleta de colores a utilizar
+                   values = df_tweets$Magnitud, # datos con lo que se creara la escala
+                   title = "Magnitud", # titulo de la leyanda
+                   opacity = .9 # nivel de transparencia
+  )%>% addProviderTiles(providers$OpenStreetMap)
+mapa
+```
+
+
+### 3) Maduro
+```{r, fig.align='center', warning=F}
+# Conexión con el API
+api_key <- "d8f4fVrx5BUoFCLC7nYyFEhTh"
+api_secret <- "oqyGEu9REkpjFvOPr1S8R8uQUsMv391y5eGc1TFSfHoYTqWlJp"
+setup_twitter_oauth(api_key, api_secret)
+
+# Descarga de tweets
+tweets.maduro<-twitteR::searchTwitteR("Nicolas Maduro",lang ="es",n=1000)
+tweets.df <- twListToDF(tweets.maduro)
+
+# Extracción de los comentarios y limpieza de texto
+tweets.df$text <- str_to_lower(tweets.df$text)
+tweets.df$text <- str_replace_all(tweets.df$text,"[[:punct:]]","")
+tweets.df$text <- str_replace_all(tweets.df$text,"[[:cntrl:]]","")
+
+# Análisis de sentimiento
+negativas <- read_file("Palabras-Negativas.csv", locale = locale(encoding = "Windows-1252")) %>% str_split("\r\n") %>% flatten_chr()
+positivas <- read_file("Palabras-Positivas.csv", locale = locale(encoding = "Windows-1252")) %>% str_split("\r\n") %>% flatten_chr()
+score <- sentimental.score(tweets.df$text,positivas,negativas)
+tweets.df$score <- score$score
+sentimiento <- tweets.df %>% group_by(score) %>% summarise(n = n())
+
+# Gráfico de barras
+ggplot(sentimiento, aes(x=score, y=n, fill=score)) + geom_col()
+
+# Se puede observar cómo existe un apoyo masivo hacia Maduro en la comunidad de Twitter
+```
